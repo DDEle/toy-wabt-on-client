@@ -30,6 +30,7 @@ function webStart() {
         })
       }
     };
+    (window as any)["importObject"] = importObject;
     const env = emptyEnv;
     var repl = new BasicREPL(importObject);
 

@@ -1,14 +1,39 @@
 import {parser} from "lezer-python";
 import {Tree, TreeCursor} from "lezer-tree";
-import {Expr, Stmt, Op} from "./ast";
+import {Expr, Stmt, Op, Type} from "./ast";
 
 export function traverseExpr(c : TreeCursor, s : string) : Expr {
   switch(c.type.name) {
+    case "None":
+      return {
+        tag: "none",
+      }
+    case "MemberExpression":
+      c.firstChild();
+      let obj = traverseExpr(c, s);
+      c.nextSibling(); // Focuses .
+      c.nextSibling(); // Focuses field name
+      const fieldName = s.substring(c.from, c.to);
+      c.parent();
+      return {
+        tag: "lookup",
+        obj,
+        name: fieldName
+      };
     case "Number":
       return {
         tag: "num",
         value: Number(s.substring(c.from, c.to))
       }
+    case "CallExpression":
+      c.firstChild();
+      const callName = s.substring(c.from, c.to);
+      c.parent();
+      // NOTE(joe): super-cheating for lecture, ignoring args, etc to parse C()
+      return {
+        tag: "construct",
+        name: callName
+      };
     case "VariableName":
       return {
         tag: "id",
@@ -32,19 +57,77 @@ export function traverseExpr(c : TreeCursor, s : string) : Expr {
   }
 }
 
+function parseType(typeName : string) : Type {
+  if(typeName === "int") {
+    return {tag: "number"};
+  }
+  else {
+    return {tag: "class", name: typeName};
+  }
+}
+
+function traverseField(c : TreeCursor, s : string) : [string, Type] {
+  c.firstChild();
+  let fieldName = s.substring(c.from, c.to);
+  c.nextSibling();
+  c.firstChild();
+  c.nextSibling(); // Focuses int
+  let typeName = s.substring(c.from, c.to);
+  let result : [string, Type] = [fieldName, parseType(typeName)];
+  c.parent();
+  c.parent();
+  return result;
+}
+
 export function traverseStmt(c : TreeCursor, s : string) : Stmt {
   switch(c.node.type.name) {
+    case "ClassDefinition":
+      c.firstChild();
+      c.nextSibling(); // Focus on class name
+      const className = s.substring(c.from, c.to);
+      c.nextSibling(); // Focus on arglist/superclass
+      c.nextSibling(); // Focus on body
+      c.firstChild();  // Focus colon
+      c.nextSibling(); // Focuses first field
+      let field1 = traverseField(c, s);
+      c.nextSibling(); // Focuses next field
+      let field2 = traverseField(c, s);
+      c.parent();
+      c.parent();
+      return {
+        tag: "class",
+        name: className,
+        field1, field2
+      };
     case "AssignStatement":
       c.firstChild(); // go to name
       const name = s.substring(c.from, c.to);
-      c.nextSibling(); // go to equals
-      c.nextSibling(); // go to value
-      const value = traverseExpr(c, s);
-      c.parent();
-      return {
-        tag: "define",
-        name: name,
-        value: value
+      c.nextSibling(); // go to equals or TypeDef
+      if(c.type.name === "TypeDef") {
+        c.firstChild();
+        c.nextSibling(); // skip colon
+        let typeName = s.substring(c.from, c.to);
+        c.parent();
+        c.nextSibling(); // equals sign/AssignOp
+        c.nextSibling(); // go to value
+        const value = traverseExpr(c, s);
+        c.parent();
+        return {
+          tag: "define",
+          name: name,
+          type: parseType(typeName),
+          value: value
+        }
+      }
+      else {
+        c.nextSibling(); // go to value
+        const value = traverseExpr(c, s);
+        c.parent();
+        return {
+          tag: "assign",
+          name: name,
+          value: value
+        }
       }
     case "ExpressionStatement":
       c.firstChild();
@@ -52,13 +135,7 @@ export function traverseStmt(c : TreeCursor, s : string) : Stmt {
       if((childName as any) === "CallExpression") { // Note(Joe): hacking around typescript here; it doesn't know about state
         c.firstChild();
         const callName = s.substring(c.from, c.to);
-        if (callName === "globals") {
-          c.parent();
-          c.parent();
-          return {
-            tag: "globals"
-          };
-        } else if (callName === "print") {
+        if (callName === "print") {
           c.nextSibling(); // go to arglist
           c.firstChild(); // go into arglist
           c.nextSibling(); // find single argument in arglist

@@ -13,11 +13,13 @@ export class BasicREPL {
     this.importObject = importObject;
     if(!importObject.js) {
       const memory = new WebAssembly.Memory({initial:10, maximum:20});
+      const view = new Int32Array(memory.buffer);
+      view[0] = 4;
       this.importObject.js = { memory: memory };
     }
     this.currentEnv = {
       globals: new Map(),
-      offset: 0
+      offset: 1
     };
   }
   async run(source : string) : Promise<any> {
