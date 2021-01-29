@@ -28,12 +28,22 @@ export async function run(source : string, config: any) : Promise<[any, compiler
   if(parsed[parsed.length - 1].tag === "expr") {
     returnType = "(result i32)";
   }
+  let globalsBefore = (config.env.globals as Map<string, number>).size;
   const compiled = compiler.compile(source, config.env);
+  let globalsAfter = compiled.newEnv.globals.size;
+
   const importObject = config.importObject;
   if(!importObject.js) {
-    const memory = new WebAssembly.Memory({initial:10, maximum:100});
+    const memory = new WebAssembly.Memory({initial:2000, maximum:2000});
     importObject.js = { memory: memory };
   }
+
+  const view = new Int32Array(importObject.js.memory.buffer);
+  let offsetBefore = view[0];
+  console.log("before updating: ", offsetBefore);
+  view[0] = offsetBefore + ((globalsAfter - globalsBefore) * 4);
+  console.log("after updating: ", view[0]);
+
   const wasmSource = `(module
     (func $print (import "imports" "imported_func") (param i32))
     (func $printglobal (import "imports" "print_global_func") (param i32) (param i32))

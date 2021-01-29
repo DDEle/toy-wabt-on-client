@@ -4,19 +4,23 @@ export type Type =
   | {tag: "none"}
   | {tag: "class", name: string}
 
-export type Stmt =
-  | { tag: "class", name: string, field1: [string, Type], field2: [string, Type] }
-  | { tag: "define", name: string, type: Type, value: Expr }
-  | { tag: "assign", name: string, value: Expr }
-  | { tag: "print", value: Expr }
-  | { tag: "expr", expr: Expr }
+export type Stmt<A> =
+  | { a?: A, tag: "class", name: string, field1: [string, Type], field2: [string, Type] }
+  | { a?: A, tag: "define", name: string, type: Type, value: Expr<A> }
+  | { a?: A, tag: "assign", name: string, value: Expr<A> }
+  | { a?: A, tag: "print", value: Expr<A> }
+  | { a?: A, tag: "expr", expr: Expr<A> }
 
-export type Expr =
-    { tag: "op", op: Op, left: Expr, right: Expr }
-  | { tag: "num", value: number }
-  | { tag: "none" }
-  | { tag: "id", name: string }
-  | { tag: "construct", name: string }
-  | { tag: "lookup", obj: Expr, name: string }
+export type Expr<A> =
+    { a?: A, tag: "op", op: Op, left: Expr<A>, right: Expr<A> }
+  | { a?: A, tag: "num", value: number }
+  | { a?: A, tag: "none" }
+  | { a?: A, tag: "id", name: string }
+  | { a?: A, tag: "construct", name: string }
+  | { a?: A, tag: "lookup", obj: Expr<A>, name: string }
 
 export enum Op { Plus, Minus } ;
+
+
+
+

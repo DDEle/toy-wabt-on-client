@@ -1,5 +1,5 @@
 import { stringInput } from "lezer-tree";
-import { Stmt, Expr, Op } from "./ast";
+import { Stmt, Expr, Op, Type } from "./ast";
 import { parse } from "./parser";
 import { tc } from "./tc";
 
@@ -8,13 +8,15 @@ import { tc } from "./tc";
 // Numbers are offsets into global memory
 export type GlobalEnv = {
   globals: Map<string, number>;
+  classes: Map<string, Map<string, number>>
   offset: number;
 }
 
-export const emptyEnv = { globals: new Map(), offset: 4 };
+export const emptyEnv = { globals: new Map(), offset: 1 };
 
-export function augmentEnv(env: GlobalEnv, stmts: Array<Stmt>) : GlobalEnv {
+export function augmentEnv(env: GlobalEnv, stmts: Array<Stmt<Type>>) : GlobalEnv {
   const newEnv = new Map(env.globals);
+  const newClasses = new Map(env.classes);
   var newOffset = env.offset;
   stmts.forEach((s) => {
     switch(s.tag) {
@@ -22,10 +24,16 @@ export function augmentEnv(env: GlobalEnv, stmts: Array<Stmt>) : GlobalEnv {
         newEnv.set(s.name, newOffset);
         newOffset += 1;
         break;
+      case "class":
+        const classDict = new Map();
+        classDict.set(s.field1[0], 0);
+        classDict.set(s.field2[0], 1);
+        newClasses.set(s.name, classDict);
     }
   })
   return {
     globals: newEnv,
+    classes: newClasses,
     offset: newOffset
   }
 }
@@ -37,9 +45,9 @@ type CompileResult = {
 
 export function compile(source: string, env: GlobalEnv) : CompileResult {
   const ast = parse(source);
-  tc(ast); // NOTE(joe): this doesn't support the REPL because GlobalEnv doesn't pass the types around
   const withDefines = augmentEnv(env, ast);
-  const commandGroups = ast.map((stmt) => codeGen(stmt, withDefines));
+  const typedAst = tc(ast); // NOTE(joe): this doesn't support the REPL because GlobalEnv doesn't pass the types around
+  const commandGroups = typedAst.map((stmt) => codeGen(stmt, withDefines));
   const commands = [].concat.apply([], commandGroups);
   return {
     wasmSource: commands.join("\n"),
@@ -52,7 +60,7 @@ function envLookup(env : GlobalEnv, name : string) : number {
   return (env.globals.get(name) * 4); // 4-byte values
 }
 
-function codeGen(stmt: Stmt, env: GlobalEnv) : Array<string> {
+function codeGen(stmt: Stmt<Type>, env: GlobalEnv) : Array<string> {
   switch(stmt.tag) {
     case "define":
       var locationToStore = [`(i32.const ${envLookup(env, stmt.name)}) ;; ${stmt.name}`];
@@ -74,7 +82,7 @@ function codeGen(stmt: Stmt, env: GlobalEnv) : Array<string> {
   }
 }
 
-function codeGenExpr(expr : Expr, env: GlobalEnv) : Array<string> {
+function codeGenExpr(expr : Expr<Type>, env: GlobalEnv) : Array<string> {
   switch(expr.tag) {
     case "num":
       return ["(i32.const " + expr.value + ")"];
@@ -83,16 +91,19 @@ function codeGenExpr(expr : Expr, env: GlobalEnv) : Array<string> {
     case "id":
       return [`(i32.const ${envLookup(env, expr.name)})`, `(i32.load)`]
     case "lookup":
+      console.log("Looking up ", expr, env);
       let objstmts = codeGenExpr(expr.obj, env);
-      // FILL THIS IN
-
-
-
-
-
-
-
-      return [];
+      let objtype = expr.obj.a;
+      if(objtype.tag !== "class") { // I don't think this error can happen
+        throw new Error("Report this as a bug to the compiler developer, this shouldn't happen " + objtype.tag);
+      }
+      let className = objtype.name;
+      let offset = env.classes.get(className).get(expr.name);
+      return [
+        ...objstmts,
+        `(i32.add (i32.const ${offset * 4}))`,
+        `(i32.load)`
+      ];
     case "construct":
       return [
           "(i32.load (i32.const 0))",  // Load the dynamic heap head offset
@@ -116,7 +127,7 @@ function codeGenExpr(expr : Expr, env: GlobalEnv) : Array<string> {
   }
 }
 
-function codeGenOp(op: Op, left: Expr, right: Expr, env: GlobalEnv): Array<string> {
+function codeGenOp(op: Op, left: Expr<Type>, right: Expr<Type>, env: GlobalEnv): Array<string> {
   var leftStmts = codeGenExpr(left, env);
   var rightStmts = codeGenExpr(right, env);
 
