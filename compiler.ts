@@ -1,6 +1,7 @@
 import { stringInput } from "lezer-tree";
 import { Stmt, Expr, Op } from "./ast";
 import { parse } from "./parser";
+import { tc } from "./tc";
 
 // https://learnxinyminutes.com/docs/wasm/
 
@@ -36,6 +37,7 @@ type CompileResult = {
 
 export function compile(source: string, env: GlobalEnv) : CompileResult {
   const ast = parse(source);
+  tc(ast); // NOTE(joe): this doesn't support the REPL because GlobalEnv doesn't pass the types around
   const withDefines = augmentEnv(env, ast);
   const commandGroups = ast.map((stmt) => codeGen(stmt, withDefines));
   const commands = [].concat.apply([], commandGroups);
@@ -94,16 +96,16 @@ function codeGenExpr(expr : Expr, env: GlobalEnv) : Array<string> {
     case "construct":
       return [
           "(i32.load (i32.const 0))",  // Load the dynamic heap head offset
-          "(i32.const -555)", // The value of field1
-          "(i32.store)",   // Put the default field value on the heap
+          "(i32.const -555)",          // The value of field1 - setting a noticeable value here, what should we do in general?
+          "(i32.store)",               // Put the default field value on the heap
           "(i32.load (i32.const 0))",  // Load the dynamic heap head offset
           "(i32.add (i32.const 4))",   // Refer to the next word
-          "(i32.const -777)", // The value of field2
-          "(i32.store)",   // Put the default field value on the heap
-          "(i32.const 0)", // Address for our upcoming store instruction
+          "(i32.const -777)",          // The value of field2
+          "(i32.store)",               // Put the default field value on the heap
+          "(i32.const 0)",             // Address for our upcoming store instruction
           "(i32.load (i32.const 0))",  // Load the dynamic heap head offset
           "(i32.add (i32.const 8))",   // Move heap head beyond the two words we just created for fields
-          "(i32.store)",   // Save the new heap offset
+          "(i32.store)",               // Save the new heap offset
 
           "(i32.load (i32.const 0))",  // Reload the heap head ptr
           "(i32.sub (i32.const 8))"    // Subtract 8 to get address for the object
