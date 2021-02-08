@@ -1,6 +1,6 @@
 import { Stmt, Expr, Op, Type } from "./ast";
 
-type Env = {
+export type Env = {
   globals: Map<string, Type>,
   classes: Map<string, Map<string, Type>>
 }
@@ -18,9 +18,9 @@ function isDecl(s : Stmt<any>) {
   return s.tag === "define" || s.tag === "class";
 }
 
-export function tc(stmts : Array<Stmt<any>>) : Array<Stmt<Type>> {
-  let vars : Map<string, Type> = new Map();
-  let classes : Map<string, Map<string, Type>> = new Map();
+export function tc(stmts : Array<Stmt<any>>, env : Env) : [Array<Stmt<Type>>, Env] {
+  let vars : Map<string, Type> = env.globals;
+  let classes : Map<string, Map<string, Type>> = env.classes;
 
   const newstmts : Array<Stmt<Type>> = [];
 
@@ -59,7 +59,7 @@ export function tc(stmts : Array<Stmt<any>>) : Array<Stmt<Type>> {
     newstmts.push(stmt);
     index += 1;
   }
-  return newstmts;
+  return [newstmts, env];
 }
 
 function equalTypes(u : Type, t : Type) {

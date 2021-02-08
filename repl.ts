@@ -1,5 +1,6 @@
 import {run} from "./runner";
 import {emptyEnv, GlobalEnv} from "./compiler";
+import {Env} from "./tc";
 
 interface REPL {
   run(source : string) : Promise<any>;
@@ -20,7 +21,11 @@ export class BasicREPL {
     this.currentEnv = {
       globals: new Map(),
       classes: new Map(),
-      offset: 1
+      offset: 1,
+      typeEnv: {
+        globals: new Map(),
+        classes: new Map()
+      }
     };
   }
   async run(source : string) : Promise<any> {

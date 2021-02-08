@@ -1,7 +1,7 @@
 import { stringInput } from "lezer-tree";
 import { Stmt, Expr, Op, Type } from "./ast";
 import { parse } from "./parser";
-import { tc } from "./tc";
+import { tc, Env } from "./tc";
 
 // https://learnxinyminutes.com/docs/wasm/
 
@@ -10,6 +10,7 @@ export type GlobalEnv = {
   globals: Map<string, number>;
   classes: Map<string, Map<string, number>>
   offset: number;
+  typeEnv: Env;
 }
 
 export const emptyEnv = { globals: new Map(), offset: 1 };
@@ -34,7 +35,8 @@ export function augmentEnv(env: GlobalEnv, stmts: Array<Stmt<Type>>) : GlobalEnv
   return {
     globals: newEnv,
     classes: newClasses,
-    offset: newOffset
+    offset: newOffset,
+    typeEnv: env.typeEnv
   }
 }
 
@@ -46,7 +48,8 @@ type CompileResult = {
 export function compile(source: string, env: GlobalEnv) : CompileResult {
   const ast = parse(source);
   const withDefines = augmentEnv(env, ast);
-  const typedAst = tc(ast); // NOTE(joe): this doesn't support the REPL because GlobalEnv doesn't pass the types around
+  const [typedAst, typeEnv] = tc(ast, env.typeEnv); // NOTE(joe): this doesn't support the REPL because GlobalEnv doesn't pass the types around
+  withDefines.typeEnv = typeEnv;
   const commandGroups = typedAst.map((stmt) => codeGen(stmt, withDefines));
   const commands = [].concat.apply([], commandGroups);
   return {
@@ -62,6 +65,8 @@ function envLookup(env : GlobalEnv, name : string) : number {
 
 function codeGen(stmt: Stmt<Type>, env: GlobalEnv) : Array<string> {
   switch(stmt.tag) {
+    case "class":
+      return [`;; ${stmt.name}`];
     case "define":
       var locationToStore = [`(i32.const ${envLookup(env, stmt.name)}) ;; ${stmt.name}`];
       var valStmts = codeGenExpr(stmt.value, env);
