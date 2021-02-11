@@ -1,34 +1,44 @@
 import {BasicREPL} from './repl';
 import {emptyEnv, GlobalEnv} from './compiler';
 import { output } from './webpack.config';
+import { BOOL, NONE, NUM } from './utils';
+import { Type } from './ast';
 
 
 function webStart() {
   document.addEventListener("DOMContentLoaded", function() {
-
-    var importObject = {
-      imports: {
-        imported_func: (arg : any) => {
-          console.log("Logging from WASM: ", arg);
-          const elt = document.createElement("pre");
-          document.getElementById("output").appendChild(elt);
-          elt.innerText = arg;
-        },
-
-        print_global_func: (pos: number, value: number) => {
-          var name = importObject.nameMap[pos];
-          var msg = name + " = " + value;
-          renderResult(msg);
-        }
-      },
-    
-      nameMap: new Array<string>(),
-    
-      updateNameMap : (env : GlobalEnv) => {
-        env.globals.forEach((pos, name) => {
-          importObject.nameMap[pos] = name;
-        })
+    function stringify(typ: Type, arg: any): string {
+      switch (typ.tag) {
+        case "number":
+          return (arg as number).toString();
+        case "bool":
+          return (arg as boolean) ? "True" : "False";
+        case "none":
+          return "None";
+        case "class":
+          return typ.name;
       }
+    }
+
+    function print(typ: Type, arg: any): any {
+      console.log("Logging from WASM: ", arg);
+      const elt = document.createElement("pre");
+      document.getElementById("output").appendChild(elt);
+      elt.innerText = stringify(typ, arg);
+      return arg;
+    }
+
+    const importObject = {
+      imports: {
+        print: (arg: any) => print(NUM, arg),
+        print_num: (arg: number) => print(NUM, arg),
+        print_bool: (arg: number) => print(BOOL, arg),
+        print_none: (arg: number) => print(NONE, arg),
+        abs: Math.abs,
+        min: Math.min,
+        max: Math.max,
+        pow: Math.pow,
+      },
     };
     const env = emptyEnv;
     var repl = new BasicREPL(importObject);

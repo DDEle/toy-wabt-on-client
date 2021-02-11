@@ -1,8 +1,12 @@
 import {run} from "./runner";
-import {emptyEnv, GlobalEnv} from "./compiler";
+import { parse } from "./parser";
+import { emptyEnv, GlobalEnv } from "./compiler";
+import { Value, Type } from "./ast";
+import { NONE } from "./utils";
 
 interface REPL {
-  run(source : string) : Promise<any>;
+  run(source: string): Promise<Value>;
+  tc(source: string): Promise<Type>;
 }
 
 export class BasicREPL {
@@ -20,10 +24,13 @@ export class BasicREPL {
       offset: 0
     };
   }
-  async run(source : string) : Promise<any> {
-    this.importObject.updateNameMap(this.currentEnv); // is this the right place for updating the object's env?
+  async run(source : string) : Promise<Value> {
     const [result, newEnv] = await run(source, {importObject: this.importObject, env: this.currentEnv});
     this.currentEnv = newEnv;
     return result;
+  }
+  async tc(source: string): Promise<Type> {
+    const ast = parse(source);
+    return NONE;
   }
 }
